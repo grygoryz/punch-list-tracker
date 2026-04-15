@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Project {
+  id        String      @id @default(uuid())
+  name      String
+  address   String
+  status    String      @default("active")
+  createdAt DateTime    @default(now())
+  items     PunchItem[]
+}
+
+model PunchItem {
+  id          String   @id @default(uuid())
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  location    String
+  description String
+  status      String   @default("open")
+  priority    String   @default("normal")
+  assignedTo  String?
+  photo       String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([assignedTo])
+}
+
+model Profile {
+  id        String   @id
+  name      String
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
