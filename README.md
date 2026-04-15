@@ -90,16 +90,3 @@ npm run dev
 `npm test` runs the Vitest suite (workflow guard + dashboard aggregation).
 
 `npm run build` produces a production build.
-
-## Possible enhancements
-
-- Audit trail (`PunchEvent` table) for every status transition — actor, from/to,
-  timestamp. Useful once reopen/dispute flows exist.
-- Multi-tenant scoping so each organization only sees its own projects (currently every
-  signed-in user sees every project, which is fine for a single-crew deployment).
-- RLS policies at the Postgres level, mirroring the server-action checks, so the DB
-  enforces authorization independently of the app layer.
-- Photo cleanup on item delete and closeout-PDF generation on project close.
-- AI triage: drop a photo, a vision model drafts location / description / priority;
-  human confirms.
-- Offline-first PWA for field workers who lose signal inside buildings.

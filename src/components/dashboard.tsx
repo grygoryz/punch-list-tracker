@@ -113,7 +113,7 @@ function BreakdownCard({
     <Card>
       <CardContent className="p-5">
         <h3 className="text-sm font-medium text-neutral-500">{title}</h3>
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 max-h-72 space-y-2 overflow-y-auto pr-1">
           {rows.length === 0 ? (
             <p className="text-sm text-neutral-400">No items</p>
           ) : (
