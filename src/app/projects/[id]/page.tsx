@@ -7,37 +7,72 @@ import { ProjectStatusBadge } from "@/components/status-badge";
 import { Dashboard } from "@/components/dashboard";
 import { PunchItemRow } from "@/components/punch-item-row";
 import { requireProfile } from "@/lib/auth";
-import { getPhotoUrl } from "@/lib/storage";
-import type { Priority, Status } from "@/lib/workflow";
+import { getPhotoUrls } from "@/lib/storage";
+import { loadDashboardStats } from "@/lib/dashboard-server";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
+const PAGE_SIZE = 20;
+
 export default async function ProjectDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
 }) {
   const { id } = await params;
+  const { page: pageParam } = await searchParams;
   const currentProfile = await requireProfile();
 
-  const project = await prisma.project.findUnique({
-    where: { id },
-    include: {
-      items: {
-        orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-      },
-    },
-  });
+  const [project, profiles] = await Promise.all([
+    prisma.project.findUnique({
+      where: { id },
+      select: { id: true, name: true, address: true, status: true },
+    }),
+    prisma.profile.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, email: true },
+    }),
+  ]);
   if (!project) notFound();
 
-  const profiles = await prisma.profile.findMany({ orderBy: { name: "asc" } });
+  const rawPage = Number(pageParam);
+  const requestedPage = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
 
-  const itemsWithPhotoUrl = await Promise.all(
-    project.items.map(async (item) => ({
-      ...item,
-      photoUrl: item.photo ? await getPhotoUrl(item.photo) : null,
-    }))
-  );
+  const [stats, rows] = await Promise.all([
+    loadDashboardStats(project.id, profiles),
+    prisma.punchItem.findMany({
+      where: { projectId: project.id },
+      orderBy: { createdAt: "desc" },
+      skip: (requestedPage - 1) * PAGE_SIZE,
+      take: PAGE_SIZE,
+      select: {
+        id: true,
+        location: true,
+        description: true,
+        status: true,
+        priority: true,
+        assignedTo: true,
+        photo: true,
+      },
+    }),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(stats.total / PAGE_SIZE));
+  const page = Math.min(totalPages, requestedPage);
+
+  const photoUrls = await getPhotoUrls(rows.map((r) => r.photo));
+  const items = rows.map((r, i) => ({
+    id: r.id,
+    location: r.location,
+    description: r.description,
+    status: r.status,
+    priority: r.priority,
+    assignedTo: r.assignedTo,
+    photoUrl: photoUrls[i],
+  }));
 
   return (
     <div className="space-y-8">
@@ -59,16 +94,13 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
-      <Dashboard
-        items={project.items as { status: Status; priority: Priority; location: string; assignedTo: string | null }[]}
-        profiles={profiles}
-      />
+      <Dashboard stats={stats} />
 
       <section>
         <h2 className="mb-3 text-lg font-semibold text-neutral-900">
-          Items ({project.items.length})
+          Items ({stats.total})
         </h2>
-        {project.items.length === 0 ? (
+        {stats.total === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-neutral-500">No punch items yet.</p>
@@ -79,7 +111,7 @@ export default async function ProjectDetailPage({
           </Card>
         ) : (
           <div className="space-y-3">
-            {itemsWithPhotoUrl.map((item) => (
+            {items.map((item) => (
               <PunchItemRow
                 key={item.id}
                 item={item}
@@ -87,9 +119,49 @@ export default async function ProjectDetailPage({
                 currentUserId={currentProfile.id}
               />
             ))}
+            {totalPages > 1 && (
+              <Pagination projectId={project.id} page={page} totalPages={totalPages} />
+            )}
           </div>
         )}
       </section>
     </div>
+  );
+}
+
+function Pagination({
+  projectId,
+  page,
+  totalPages,
+}: {
+  projectId: string;
+  page: number;
+  totalPages: number;
+}) {
+  const linkClass =
+    "rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:border-neutral-400 hover:text-neutral-900";
+  const disabledClass =
+    "rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-400 cursor-not-allowed";
+
+  return (
+    <nav className="flex items-center justify-between pt-4" aria-label="Pagination">
+      {page > 1 ? (
+        <Link href={`/projects/${projectId}?page=${page - 1}`} className={linkClass}>
+          ← Previous
+        </Link>
+      ) : (
+        <span className={cn(disabledClass)}>← Previous</span>
+      )}
+      <span className="text-sm text-neutral-500 tabular-nums">
+        Page {page} of {totalPages}
+      </span>
+      {page < totalPages ? (
+        <Link href={`/projects/${projectId}?page=${page + 1}`} className={linkClass}>
+          Next →
+        </Link>
+      ) : (
+        <span className={cn(disabledClass)}>Next →</span>
+      )}
+    </nav>
   );
 }

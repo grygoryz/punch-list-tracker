@@ -8,13 +8,21 @@ import { formatDate } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsPage() {
-  const projects = await prisma.project.findMany({
-    orderBy: { createdAt: "desc" },
-    include: {
-      _count: { select: { items: true } },
-      items: { select: { status: true } },
-    },
-  });
+  const [projects, statusGroups] = await Promise.all([
+    prisma.project.findMany({ orderBy: { createdAt: "desc" } }),
+    prisma.punchItem.groupBy({
+      by: ["projectId", "status"],
+      _count: { _all: true },
+    }),
+  ]);
+
+  const statsByProject = new Map<string, { total: number; complete: number }>();
+  for (const g of statusGroups) {
+    const s = statsByProject.get(g.projectId) ?? { total: 0, complete: 0 };
+    s.total += g._count._all;
+    if (g.status === "complete") s.complete += g._count._all;
+    statsByProject.set(g.projectId, s);
+  }
 
   return (
     <div className="space-y-6">
@@ -42,8 +50,10 @@ export default async function ProjectsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => {
-            const total = project._count.items;
-            const complete = project.items.filter((i) => i.status === "complete").length;
+            const { total, complete } = statsByProject.get(project.id) ?? {
+              total: 0,
+              complete: 0,
+            };
             const pct = total === 0 ? 0 : Math.round((complete / total) * 100);
             return (
               <Link key={project.id} href={`/projects/${project.id}`}>

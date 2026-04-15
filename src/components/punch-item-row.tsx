@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { assignItem, updateItemStatus, type ActionState } from "@/actions/items";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Select } from "@/components/ui/input";
+import { SelectField } from "@/components/ui/input";
 import { PriorityBadge, StatusBadge } from "@/components/status-badge";
 import { nextAllowed, type Priority, type Status } from "@/lib/workflow";
 
@@ -113,7 +113,7 @@ function AssignControl({
   return (
     <form action={formAction} className="flex items-center gap-2">
       <input type="hidden" name="itemId" value={itemId} />
-      <Select
+      <SelectField
         name="assignedTo"
         defaultValue=""
         disabled={pending}
@@ -130,7 +130,7 @@ function AssignControl({
             {p.name}
           </option>
         ))}
-      </Select>
+      </SelectField>
     </form>
   );
 }

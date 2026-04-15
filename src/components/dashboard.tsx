@@ -7,41 +7,11 @@ import {
   STATUSES,
   STATUS_LABELS,
   type Priority,
-  type Status,
 } from "@/lib/workflow";
+import type { DashboardStats } from "@/lib/dashboard";
 
-type MinimalItem = {
-  status: Status;
-  priority: Priority;
-  location: string;
-  assignedTo: string | null;
-};
-
-type Profile = { id: string; name: string; email: string };
-
-function countBy<T, K extends string>(items: T[], keyFn: (item: T) => K): Record<K, number> {
-  const out: Record<string, number> = {};
-  for (const item of items) {
-    const k = keyFn(item);
-    out[k] = (out[k] ?? 0) + 1;
-  }
-  return out as Record<K, number>;
-}
-
-export function Dashboard({ items, profiles }: { items: MinimalItem[]; profiles: Profile[] }) {
-  const total = items.length;
-  const complete = items.filter((i) => i.status === "complete").length;
-  const pct = total === 0 ? 0 : Math.round((complete / total) * 100);
-
-  const byStatus = countBy(items, (i) => i.status);
-  const byPriority = countBy(items, (i) => i.priority);
-  const byLocation = countBy(items, (i) => i.location);
-
-  const profileById = new Map(profiles.map((p) => [p.id, p]));
-  const byAssignee = countBy(items, (i) => {
-    if (!i.assignedTo) return "Unassigned";
-    return profileById.get(i.assignedTo)?.name ?? "Unknown";
-  });
+export function Dashboard({ stats }: { stats: DashboardStats }) {
+  const { total, complete, pct, byStatus, byPriority, byLocation, byAssignee } = stats;
 
   return (
     <div className="space-y-4">

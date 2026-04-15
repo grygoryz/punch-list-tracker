@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Punch List Tracker
 
-## Getting Started
+A small web app for tracking construction punch lists — the defects found at the end of a
+project that have to be cleared before closeout. Superintendents create projects, log
+defects with a location/description/photo, assign them to workers, and watch the
+completion dashboard fill in.
 
-First, run the development server:
+## What's in here
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- **Next.js 16** (App Router, Server Actions, React 19) — pages, mutations, and the API
+  layer all live in one place.
+- **Supabase** for Postgres, email+password / magic-link auth, and photo storage
+  (private bucket, 1-hour signed URLs).
+- **Prisma 6** ORM against the Supabase Postgres instance.
+- **Tailwind 4** + a small local set of UI primitives for styling.
+- **Vitest** for the unit tests around the workflow rules and dashboard math.
+
+## The domain
+
+Three tables:
+
+- **Project** — `name`, `address`, `status`, items.
+- **PunchItem** — belongs to a project. Has `location`, `description`, `priority`,
+  `status`, `assignedTo`, `photo`, timestamps.
+- **Profile** — mirrors `auth.users` so `assignedTo` / `createdBy` reference real people
+  instead of free-text strings.
+
+## How it works
+
+1. Sign in (email + password or magic link). A `Profile` row is created on first login.
+2. Create a project. Open it to see the dashboard and an empty item list.
+3. Add punch items. Each item captures location, description, priority, and an optional
+   photo uploaded to Supabase Storage.
+4. Assign an item to a worker. From that point on, **only that worker** can advance the
+   item through the workflow.
+5. The dashboard shows overall completion %, plus breakdowns by status, priority,
+   location, and assignee. Numbers update on every mutation via `revalidatePath`.
+
+## Workflow rules (enforced server-side)
+
+The schema stores `status` as a plain string and `assignedTo` as nullable, so nothing in
+the database stops an illegal state. The rules are enforced in `src/lib/workflow.ts` and
+`src/actions/items.ts`:
+
+- **Forward-only state machine.** `open → in_progress → complete`. No skipping
+  (`open → complete` is rejected), no regression (`complete → *` and `in_progress → open`
+  are rejected), no re-transition to the same state.
+- **Assignment gates progress.** An item cannot move past `open` until it has an
+  assignee. The check lives in `assertValidTransition` and runs on every status mutation.
+- **Assignment is one-shot.** Once an item is assigned, the assignee is locked in. This
+  is enforced with a conditional `updateMany … WHERE assignedTo IS NULL`, so two users
+  racing to claim the same item can't both win.
+- **Only the assignee can advance status.** The server action compares the session user
+  against `item.assignedTo` before calling the workflow guard.
+- **Status writes are conditional.** `updateItemStatus` writes with
+  `WHERE status = <value it validated>`, so a stale read never corrupts the row.
+
+The UI disables buttons for invalid actions (e.g. no "Start work" button until an
+assignee is picked), but the server is the source of truth — direct calls with bad
+payloads are rejected with a clear error message.
+
+## Project layout
+
+```
+prisma/schema.prisma              Data model
+src/lib/workflow.ts               State machine + transition guard
+src/lib/dashboard.ts              Aggregation math (pure, unit-tested)
+src/lib/storage.ts                Supabase photo upload + signed URLs
+src/lib/auth.ts                   requireProfile() — session → Profile row
+src/lib/supabase/{server,client,admin,middleware}.ts
+src/actions/projects.ts           createProject server action
+src/actions/items.ts              createItem / assignItem / updateItemStatus
+src/components/dashboard.tsx      Completion % + breakdown cards
+src/components/punch-item-row.tsx Item row with status transition controls
+src/app/projects/…                List / create / detail pages
+src/app/login/page.tsx            Sign-in
+proxy.ts                          Next 16 middleware (session refresh + guard)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Running locally
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+cp .env.example .env              # fill in Supabase + DB credentials
+npm install
+npx prisma generate
+npx prisma migrate deploy
+npm run dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`npm test` runs the Vitest suite (workflow guard + dashboard aggregation).
 
-## Learn More
+`npm run build` produces a production build.
 
-To learn more about Next.js, take a look at the following resources:
+## Possible enhancements
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Audit trail (`PunchEvent` table) for every status transition — actor, from/to,
+  timestamp. Useful once reopen/dispute flows exist.
+- Multi-tenant scoping so each organization only sees its own projects (currently every
+  signed-in user sees every project, which is fine for a single-crew deployment).
+- RLS policies at the Postgres level, mirroring the server-action checks, so the DB
+  enforces authorization independently of the app layer.
+- Photo cleanup on item delete and closeout-PDF generation on project close.
+- AI triage: drop a photo, a vision model drafts location / description / priority;
+  human confirms.
+- Offline-first PWA for field workers who lose signal inside buildings.

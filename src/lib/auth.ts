@@ -1,21 +1,22 @@
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { Prisma } from "@prisma/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { prisma } from "@/lib/prisma";
 
-export async function getSessionUser() {
+export const getSessionUser = cache(async () => {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
   return user;
-}
+});
 
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const user = await getSessionUser();
   if (!user) redirect("/login");
   return user;
-}
+});
 
-export async function requireProfile() {
+export const requireProfile = cache(async () => {
   const user = await requireUser();
   const existing = await prisma.profile.findUnique({ where: { id: user.id } });
   if (existing) return existing;
@@ -34,4 +35,4 @@ export async function requireProfile() {
     }
     throw e;
   }
-}
+});

@@ -4,7 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { createItem, type ActionState } from "@/actions/items";
 import { Button } from "@/components/ui/button";
-import { Input, Label, Select, Textarea } from "@/components/ui/input";
+import { Input, Label, SelectField, Textarea } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { PRIORITIES, PRIORITY_LABELS } from "@/lib/workflow";
 import { LIMITS } from "@/lib/limits";
@@ -74,24 +74,24 @@ export function NewItemForm({
           </div>
           <div>
             <Label htmlFor="priority">Priority</Label>
-            <Select id="priority" name="priority" defaultValue="normal" required>
+            <SelectField id="priority" name="priority" defaultValue="normal" required>
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
                   {PRIORITY_LABELS[p]}
                 </option>
               ))}
-            </Select>
+            </SelectField>
           </div>
           <div>
             <Label htmlFor="assignedTo">Assign to (optional)</Label>
-            <Select id="assignedTo" name="assignedTo" defaultValue="">
+            <SelectField id="assignedTo" name="assignedTo" defaultValue="">
               <option value="">Unassigned</option>
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                 </option>
               ))}
-            </Select>
+            </SelectField>
           </div>
           <div>
             <Label htmlFor="photo">Photo (optional)</Label>

@@ -33,7 +33,7 @@ export const Textarea = React.forwardRef<
 ));
 Textarea.displayName = "Textarea";
 
-export const Select = React.forwardRef<
+export const SelectField = React.forwardRef<
   HTMLSelectElement,
   React.SelectHTMLAttributes<HTMLSelectElement>
 >(({ className, children, ...props }, ref) => (
@@ -48,7 +48,7 @@ export const Select = React.forwardRef<
     {children}
   </select>
 ));
-Select.displayName = "Select";
+SelectField.displayName = "SelectField";
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (

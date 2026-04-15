@@ -95,20 +95,22 @@ export async function assignItem(
   });
   if (!parsed.success) return { error: "Pick someone to assign." };
 
-  const existing = await prisma.punchItem.findUnique({
-    where: { id: parsed.data.itemId },
-    select: { assignedTo: true, projectId: true },
+  const updated = await prisma.punchItem.updateManyAndReturn({
+    where: { id: parsed.data.itemId, assignedTo: null },
+    data: { assignedTo: parsed.data.assignedTo },
+    select: { projectId: true },
   });
-  if (!existing) return { error: "Item not found" };
-  if (existing.assignedTo) {
+
+  if (updated.length === 0) {
+    const existing = await prisma.punchItem.findUnique({
+      where: { id: parsed.data.itemId },
+      select: { id: true },
+    });
+    if (!existing) return { error: "Item not found" };
     return { error: "This item is already assigned and cannot be reassigned." };
   }
 
-  await prisma.punchItem.update({
-    where: { id: parsed.data.itemId },
-    data: { assignedTo: parsed.data.assignedTo },
-  });
-  revalidatePath(`/projects/${existing.projectId}`);
+  revalidatePath(`/projects/${updated[0].projectId}`);
   return {};
 }
 
@@ -148,10 +150,13 @@ export async function updateItemStatus(
     throw e;
   }
 
-  await prisma.punchItem.update({
-    where: { id: item.id },
+  const result = await prisma.punchItem.updateMany({
+    where: { id: item.id, status: item.status, assignedTo: item.assignedTo },
     data: { status: parsed.data.toStatus },
   });
+  if (result.count === 0) {
+    return { error: "Item changed while you were editing. Refresh and try again." };
+  }
   revalidatePath(`/projects/${item.projectId}`);
   return {};
 }

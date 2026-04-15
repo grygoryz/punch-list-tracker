@@ -26,3 +26,22 @@ export async function getPhotoUrl(path: string): Promise<string | null> {
   if (error) return null;
   return data.signedUrl;
 }
+
+export async function getPhotoUrls(
+  paths: (string | null)[]
+): Promise<(string | null)[]> {
+  const nonEmpty = paths.filter((p): p is string => !!p);
+  if (nonEmpty.length === 0) return paths.map(() => null);
+
+  const admin = createSupabaseAdminClient();
+  const { data, error } = await admin.storage
+    .from(PHOTO_BUCKET)
+    .createSignedUrls(nonEmpty, 60 * 60);
+  if (error || !data) return paths.map(() => null);
+
+  const byPath = new Map<string, string>();
+  for (const entry of data) {
+    if (entry.path && entry.signedUrl) byPath.set(entry.path, entry.signedUrl);
+  }
+  return paths.map((p) => (p ? byPath.get(p) ?? null : null));
+}
